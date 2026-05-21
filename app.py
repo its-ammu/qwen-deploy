@@ -28,7 +28,7 @@ from flask import (
 
 from api_docs import build_openapi_spec
 from auth import require_api_key, require_ui_session, validate_api_key
-from config import Config
+from config import DEFAULT_MODELS_DIR, Config
 from model_service import (
     audio_to_base64_data_url,
     build_conversation_from_form,
@@ -51,6 +51,8 @@ def create_app() -> Flask:
     app = Flask(__name__)
     app.config.from_object(Config)
     os.makedirs(Config.UPLOAD_FOLDER, exist_ok=True)
+    os.makedirs(DEFAULT_MODELS_DIR, exist_ok=True)
+    os.makedirs(os.path.dirname(Config.MODEL_PATH), exist_ok=True)
 
     if not Config.API_KEY:
         generated = secrets.token_urlsafe(32)

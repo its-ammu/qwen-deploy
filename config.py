@@ -1,6 +1,17 @@
 import os
 import secrets
 
+# Project root (directory containing config.py)
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DEFAULT_MODELS_DIR = os.path.join(BASE_DIR, "models")
+
+
+def default_model_path(model_id: str) -> str:
+    models_dir = os.environ.get("MODELS_DIR", DEFAULT_MODELS_DIR)
+    if not os.path.isabs(models_dir):
+        models_dir = os.path.abspath(models_dir)
+    return os.path.join(models_dir, model_id.split("/")[-1])
+
 
 def _resolve_shared_key() -> str:
     """Single key for API auth and Flask session signing."""
@@ -19,7 +30,7 @@ class Config:
     MODEL_ID = os.environ.get(
         "MODEL_ID", "Qwen/Qwen3-Omni-30B-A3B-Instruct"
     )
-    MODEL_PATH = os.environ.get("MODEL_PATH", MODEL_ID)
+    MODEL_PATH = os.environ.get("MODEL_PATH") or default_model_path(MODEL_ID)
 
     # transformers | vllm
     INFERENCE_BACKEND = os.environ.get("INFERENCE_BACKEND", "transformers")

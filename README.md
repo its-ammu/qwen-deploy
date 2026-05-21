@@ -41,10 +41,17 @@ sudo apt-get install -y ffmpeg python3-venv python3-pip
 python3 -m venv .venv
 . .venv/bin/activate   # use bash, or: source .venv/bin/activate
 
-# GPU: install CUDA PyTorch first, then app deps (includes transformers from git)
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
+# GPU: install CUDA PyTorch first (use cu126/cu128 — cu124 has no current wheels)
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu126
+# If that fails, pin versions: pip install torch==2.7.1 torchvision==0.22.1 torchaudio==2.7.1 --index-url https://download.pytorch.org/whl/cu126
 pip install -r requirements.txt
-pip install -U flash-attn --no-build-isolation  # optional, recommended on GPU
+
+# flash-attn is OPTIONAL — skip if CUDA toolkit (13.1) != PyTorch CUDA (12.6); app uses sdpa instead
+# Option A (skip): do nothing — recommended if install fails
+# Option B (align CUDA 13.1): reinstall PyTorch then flash-attn:
+#   pip install torch==2.11.0 torchvision==0.26.0 torchaudio==2.11.0 --index-url https://download.pytorch.org/whl/cu130
+#   pip install -U flash-attn --no-build-isolation
+# Option C (force build, cu126 torch): TORCH_DONT_CHECK_CUDA_VERSION=1 pip install -U flash-attn --no-build-isolation
 
 cp .env.example .env
 # Set API_KEY, optionally MODEL_PATH to pre-downloaded weights
@@ -58,15 +65,20 @@ Security group: allow inbound **TCP 7860**.
 
 ### Pre-download weights (recommended)
 
+Weights default to `./models/` in the project directory (no `/opt` permissions needed).
+
 ```bash
 pip install -U "huggingface_hub[cli]"
-huggingface-cli download Qwen/Qwen3-Omni-30B-A3B-Instruct --local-dir /opt/models/Qwen3-Omni-30B-A3B-Instruct
+mkdir -p ./models
+huggingface-cli download Qwen/Qwen3-Omni-30B-A3B-Instruct \
+  --local-dir ./models/Qwen3-Omni-30B-A3B-Instruct
 ```
 
-Set in `.env`:
+Optional `.env` overrides:
 
 ```
-MODEL_PATH=/opt/models/Qwen3-Omni-30B-A3B-Instruct
+MODELS_DIR=./models
+MODEL_PATH=./models/Qwen3-Omni-30B-A3B-Instruct
 ```
 
 ## API documentation
