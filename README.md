@@ -39,10 +39,12 @@ sudo apt-get update
 sudo apt-get install -y ffmpeg python3-venv python3-pip
 
 python3 -m venv .venv
-source .venv/bin/activate
+. .venv/bin/activate   # use bash, or: source .venv/bin/activate
+
+# GPU: install CUDA PyTorch first, then app deps (includes transformers from git)
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
 pip install -r requirements.txt
-pip install git+https://github.com/huggingface/transformers
-pip install -U flash-attn --no-build-isolation  # recommended on GPU
+pip install -U flash-attn --no-build-isolation  # optional, recommended on GPU
 
 cp .env.example .env
 # Set API_KEY, optionally MODEL_PATH to pre-downloaded weights
