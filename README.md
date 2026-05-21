@@ -14,6 +14,59 @@ Default model: `Qwen/Qwen3-Omni-30B-A3B-Instruct`
 - CUDA drivers, Python 3.10+
 - `ffmpeg` for media processing
 
+### GPU sizing (important)
+
+**22GB VRAM is not enough** for `Qwen3-Omni-30B-A3B-Instruct`. With `device_map="auto"`, Transformers spills weights to CPU/disk; this MoE model then fails with the `offload_folder` / safetensors error you saw.
+
+| Model | Min VRAM (BF16, ~15s video) | Notes |
+|-------|-----------------------------|--------|
+| `Qwen3-Omni-30B-A3B-Instruct` | **~79 GB** | Thinker + talker |
+| Same + `disable_talker()` | **~69 GB** | Text-only output (app sets this when `RETURN_AUDIO=false`) |
+| `Qwen3-Omni-30B-A3B-Thinking` | **~69 GB** | Text only, no talker |
+
+**AWS instances that fit (examples):**
+
+| Instance | GPUs × VRAM | Total | Fit? |
+|----------|-------------|-------|------|
+| `g5.2xlarge` | 1 × 24 GB | 24 GB | No |
+| `g5.12xlarge` | 4 × 24 GB | 96 GB | Yes — use 4-way tensor parallel (`INFERENCE_BACKEND=vllm`, `-tp 4`) or multi-GPU `device_map` |
+| `g5.48xlarge` | 8 × 24 GB | 192 GB | Yes |
+| `p5.2xlarge` | 1 × 80 GB (H100) | 80 GB | Yes (minimum headroom) |
+| `p4de.24xlarge` | 8 × 80 GB (A100) | 640 GB | Yes |
+
+**Recommendation:** move from a **24GB** box (`g5.2xlarge` / similar) to at least **`p5.2xlarge` (80GB)** for a single GPU, or **`g5.12xlarge` (4×24GB)** with multi-GPU inference.
+
+Disk/CPU offload is not a practical fix for this MoE model at 22GB (very slow, and often breaks as above).
+
+### g5.12xlarge (4× A10G 24GB) — recommended `.env`
+
+After resizing the instance, confirm 4 GPUs:
+
+```bash
+nvidia-smi
+python3 -c "import torch; print('GPUs:', torch.cuda.device_count())"
+```
+
+Copy `.env.example` to `.env` and use (already tuned for **96 GB** total):
+
+```env
+INFERENCE_BACKEND=transformers
+TENSOR_PARALLEL_SIZE=4
+MAX_MEMORY_PER_GPU=22GiB
+DISABLE_CPU_OFFLOAD=true
+RETURN_AUDIO=false
+```
+
+Then deploy as usual (`./run.sh`). The app spreads the model across 4 GPUs and **blocks CPU/disk offload** (avoids the MoE `offload_folder` error).
+
+**Tips on g5.12xlarge:**
+
+- Keep **`RETURN_AUDIO=false`** unless you need speech output (~10 GB extra VRAM).
+- First model load can take **5–15 minutes**.
+- If OOM: lower `MAX_NEW_TOKENS`, avoid long video inputs, or set `VLLM_MAX_MODEL_LEN=16384` when using vLLM.
+- Use **one** gunicorn worker only (`run.sh` already does this).
+- For vLLM (optional, faster): `INFERENCE_BACKEND=vllm`, `TENSOR_PARALLEL_SIZE=4`, plus the [Qwen3-Omni vLLM build](https://huggingface.co/Qwen/Qwen3-Omni-30B-A3B-Instruct#vllm-usage).
+
 ## Quick start (development / mock)
 
 ```bash
@@ -41,17 +94,15 @@ sudo apt-get install -y ffmpeg python3-venv python3-pip
 python3 -m venv .venv
 . .venv/bin/activate   # use bash, or: source .venv/bin/activate
 
-# GPU: install CUDA PyTorch first (use cu126/cu128 — cu124 has no current wheels)
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu126
-# If that fails, pin versions: pip install torch==2.7.1 torchvision==0.22.1 torchaudio==2.7.1 --index-url https://download.pytorch.org/whl/cu126
+# GPU: PyTorch has no cu131 index — use cu130 for CUDA toolkit 13.1 (pin versions; unpinned often fails)
+pip install torch==2.11.0 torchvision==0.26.0 torchaudio==2.11.0 \
+  --index-url https://download.pytorch.org/whl/cu130
+python3 -c "import torch; print(torch.__version__, 'cuda', torch.version.cuda)"
 pip install -r requirements.txt
 
-# flash-attn is OPTIONAL — skip if CUDA toolkit (13.1) != PyTorch CUDA (12.6); app uses sdpa instead
-# Option A (skip): do nothing — recommended if install fails
-# Option B (align CUDA 13.1): reinstall PyTorch then flash-attn:
-#   pip install torch==2.11.0 torchvision==0.26.0 torchaudio==2.11.0 --index-url https://download.pytorch.org/whl/cu130
-#   pip install -U flash-attn --no-build-isolation
-# Option C (force build, cu126 torch): TORCH_DONT_CHECK_CUDA_VERSION=1 pip install -U flash-attn --no-build-isolation
+# flash-attn (optional; matches cu130 + CUDA 13.1 toolkit better than cu126)
+pip install -U flash-attn --no-build-isolation
+# If flash-attn still fails, skip it — the app falls back to sdpa attention
 
 cp .env.example .env
 # Set API_KEY, optionally MODEL_PATH to pre-downloaded weights
@@ -166,8 +217,11 @@ The UI uses session cookies (`/ui/api/chat`) — no need to paste the key on eve
 | `PORT` | `7860` | Listen port |
 | `MODEL_ID` / `MODEL_PATH` | Instruct HF id | Model to load |
 | `INFERENCE_BACKEND` | `transformers` | `transformers` or `vllm` |
+| `TENSOR_PARALLEL_SIZE` | `0` (all GPUs) | vLLM tensor parallel; set `4` on g5.12xlarge |
+| `MAX_MEMORY_PER_GPU` | `22GiB` | Per-GPU cap for Transformers multi-GPU load |
+| `DISABLE_CPU_OFFLOAD` | `true` | Avoid CPU/disk offload (MoE errors on small GPUs) |
 | `MOCK_INFERENCE` | `false` | Skip GPU model for testing |
-| `RETURN_AUDIO` | `false` | Enable talker audio output |
+| `RETURN_AUDIO` | `false` | Enable talker audio output (~10 GB extra VRAM) |
 | `LOAD_MODEL_ON_STARTUP` | `true` | Warm model at boot |
 
 ## vLLM backend (optional)

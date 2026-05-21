@@ -85,6 +85,7 @@ def create_app() -> Flask:
                 "model": Config.MODEL_ID,
                 "model_path": Config.MODEL_PATH,
                 "backend": Config.INFERENCE_BACKEND,
+                "tensor_parallel_size": Config.resolve_tensor_parallel_size(),
                 "model_loaded": is_loaded(),
                 "mock": Config.MOCK_INFERENCE,
                 "load_error": load_error(),

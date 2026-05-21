@@ -34,6 +34,18 @@ class Config:
 
     # transformers | vllm
     INFERENCE_BACKEND = os.environ.get("INFERENCE_BACKEND", "transformers")
+    # 0 = use all visible GPUs (g5.12xlarge → 4); set 4 explicitly on 4-GPU nodes
+    TENSOR_PARALLEL_SIZE = int(os.environ.get("TENSOR_PARALLEL_SIZE", "0"))
+    MAX_MEMORY_PER_GPU = os.environ.get("MAX_MEMORY_PER_GPU", "22GiB")
+    DISABLE_CPU_OFFLOAD = os.environ.get("DISABLE_CPU_OFFLOAD", "true").lower() in (
+        "1",
+        "true",
+        "yes",
+    )
+    VLLM_GPU_MEMORY_UTILIZATION = float(
+        os.environ.get("VLLM_GPU_MEMORY_UTILIZATION", "0.85")
+    )
+    VLLM_MAX_MODEL_LEN = int(os.environ.get("VLLM_MAX_MODEL_LEN", "32768"))
 
     LOAD_MODEL_ON_STARTUP = os.environ.get("LOAD_MODEL_ON_STARTUP", "true").lower() in (
         "1",
@@ -67,3 +79,14 @@ class Config:
 
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = "Lax"
+
+    @staticmethod
+    def resolve_tensor_parallel_size() -> int:
+        if Config.TENSOR_PARALLEL_SIZE > 0:
+            return Config.TENSOR_PARALLEL_SIZE
+        try:
+            import torch
+
+            return max(1, torch.cuda.device_count())
+        except ImportError:
+            return 1

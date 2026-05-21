@@ -78,11 +78,26 @@ def _load_transformers() -> None:
         logger.warning("flash-attn not found; using sdpa attention")
 
     _processor = Qwen3OmniMoeProcessor.from_pretrained(Config.MODEL_PATH)
+    load_kwargs: dict[str, Any] = {
+        "dtype": "auto",
+        "device_map": "auto",
+        "attn_implementation": attn,
+    }
+    gpu_count = torch.cuda.device_count()
+    if gpu_count > 1:
+        max_memory = {i: Config.MAX_MEMORY_PER_GPU for i in range(gpu_count)}
+        if Config.DISABLE_CPU_OFFLOAD:
+            max_memory["cpu"] = "0GiB"
+            max_memory["disk"] = "0GiB"
+        load_kwargs["max_memory"] = max_memory
+        logger.info(
+            "Multi-GPU load: %s GPUs, max_memory=%s",
+            gpu_count,
+            Config.MAX_MEMORY_PER_GPU,
+        )
     _model = Qwen3OmniMoeForConditionalGeneration.from_pretrained(
         Config.MODEL_PATH,
-        dtype="auto",
-        device_map="auto",
-        attn_implementation=attn,
+        **load_kwargs,
     )
     if not Config.RETURN_AUDIO:
         _model.disable_talker()
@@ -96,15 +111,16 @@ def _load_vllm() -> None:
 
     os.environ["VLLM_USE_V1"] = "0"
     _processor = Qwen3OmniMoeProcessor.from_pretrained(Config.MODEL_PATH)
-    tp = max(1, torch.cuda.device_count()) if torch.cuda.is_available() else 1
+    tp = Config.resolve_tensor_parallel_size()
+    logger.info("vLLM tensor_parallel_size=%s", tp)
     _vllm = LLM(
         model=Config.MODEL_PATH,
         trust_remote_code=True,
-        gpu_memory_utilization=0.9,
+        gpu_memory_utilization=Config.VLLM_GPU_MEMORY_UTILIZATION,
         tensor_parallel_size=tp,
         limit_mm_per_prompt={"image": 3, "video": 3, "audio": 3},
         max_num_seqs=4,
-        max_model_len=32768,
+        max_model_len=Config.VLLM_MAX_MODEL_LEN,
     )
 
 
