@@ -37,6 +37,71 @@ def load_error() -> str | None:
     return _load_error
 
 
+def is_loading() -> bool:
+    return _lock.locked() and not _loaded
+
+
+def _model_primary_device(model: Any) -> Any:
+    import torch
+
+    if hasattr(model, "device"):
+        dev = model.device
+        if isinstance(dev, torch.device) and dev.type != "meta":
+            return dev
+    for param in model.parameters():
+        if param.device.type != "meta":
+            return param.device
+    return torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
+
+def _parse_text_generate_result(
+    generate_result: Any,
+    input_ids: Any,
+    processor: Any,
+) -> tuple[str, Any | None, int, int]:
+    """Normalize Qwen3-Omni generate() return values across versions/configs."""
+    audio_out = None
+    text_part = generate_result
+
+    if isinstance(generate_result, tuple):
+        text_part = generate_result[0]
+        if len(generate_result) > 1:
+            audio_out = generate_result[1]
+
+    prompt_len = int(input_ids.shape[1])
+
+    if isinstance(text_part, str):
+        return text_part, audio_out, prompt_len, 0
+
+    sequences = None
+    if hasattr(text_part, "sequences"):
+        sequences = text_part.sequences
+    else:
+        try:
+            import torch
+
+            if isinstance(text_part, torch.Tensor):
+                sequences = text_part
+        except ImportError:
+            pass
+
+    if sequences is None:
+        raise TypeError(
+            f"Unexpected generate() return type: {type(text_part)!r} "
+            f"(return_audio={Config.RETURN_AUDIO})"
+        )
+
+    new_tokens = sequences[:, prompt_len:]
+    decoded = processor.batch_decode(
+        new_tokens,
+        skip_special_tokens=True,
+        clean_up_tokenization_spaces=False,
+    )
+    text = decoded[0] if decoded else ""
+    completion_len = int(new_tokens.shape[1])
+    return text, audio_out, prompt_len, completion_len
+
+
 def load_model() -> None:
     global _model, _processor, _vllm, _loaded, _load_error
 
@@ -219,7 +284,8 @@ def generate(
     if Config.MOCK_INFERENCE:
         return _mock_generate(messages)
 
-    load_model()
+    if not _loaded:
+        load_model()
     if not _loaded:
         raise RuntimeError(_load_error or "Model is not loaded")
 
@@ -299,25 +365,31 @@ def _generate_transformers(
         padding=True,
         use_audio_in_video=use_audio_in_video,
     )
-    inputs = inputs.to(_model.device).to(_model.dtype)
+    device = _model_primary_device(_model)
+    inputs = inputs.to(device)
+    if hasattr(inputs, "to"):
+        try:
+            inputs = inputs.to(_model.dtype)
+        except Exception:
+            pass
 
     gen_kwargs: dict[str, Any] = {
         "max_new_tokens": max_new_tokens,
         "use_audio_in_video": use_audio_in_video,
-        "thinker_return_dict_in_generate": True,
+        "return_audio": return_audio,
     }
     if return_audio:
         gen_kwargs["speaker"] = speaker
+        gen_kwargs["thinker_return_dict_in_generate"] = True
     else:
         gen_kwargs["return_audio"] = False
 
-    text_ids, audio_out = _model.generate(**inputs, **gen_kwargs)
-    decoded = _processor.batch_decode(
-        text_ids.sequences[:, inputs["input_ids"].shape[1] :],
-        skip_special_tokens=True,
-        clean_up_tokenization_spaces=False,
+    generate_result = _model.generate(**inputs, **gen_kwargs)
+    response_text, audio_out, prompt_len, completion_len = _parse_text_generate_result(
+        generate_result,
+        inputs["input_ids"],
+        _processor,
     )
-    response_text = decoded[0] if decoded else ""
 
     audio_path = None
     if audio_out is not None:
@@ -331,15 +403,13 @@ def _generate_transformers(
             samplerate=24000,
         )
 
-    prompt_len = inputs["input_ids"].shape[1]
-    completion_len = text_ids.sequences.shape[1] - prompt_len
     return {
         "text": response_text,
         "audio_path": audio_path,
         "usage": {
-            "prompt_tokens": int(prompt_len),
-            "completion_tokens": int(completion_len),
-            "total_tokens": int(prompt_len + completion_len),
+            "prompt_tokens": prompt_len,
+            "completion_tokens": completion_len,
+            "total_tokens": prompt_len + completion_len,
         },
     }
 

@@ -12,7 +12,6 @@ except ImportError:
 import logging
 import os
 import secrets
-import threading
 import time
 from datetime import datetime, timezone
 
@@ -34,6 +33,7 @@ from model_service import (
     build_conversation_from_form,
     generate,
     is_loaded,
+    is_loading,
     load_error,
     load_model,
     normalize_messages,
@@ -87,6 +87,7 @@ def create_app() -> Flask:
                 "backend": Config.INFERENCE_BACKEND,
                 "tensor_parallel_size": Config.resolve_tensor_parallel_size(),
                 "model_loaded": is_loaded(),
+                "model_loading": is_loading(),
                 "mock": Config.MOCK_INFERENCE,
                 "load_error": load_error(),
                 "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -288,29 +289,17 @@ def create_app() -> Flask:
 app = create_app()
 
 
-@app.before_request
-def _ensure_model_on_first_request():
-    if (
-        not is_loaded()
-        and Config.LOAD_MODEL_ON_STARTUP
-        and not Config.MOCK_INFERENCE
-        and request.path.startswith(("/api/", "/ui/"))
-    ):
-        try:
-            load_model()
-        except Exception:
-            pass
-
-
-def _startup_load():
-    if Config.LOAD_MODEL_ON_STARTUP and not Config.MOCK_INFERENCE:
-        try:
-            load_model()
-        except Exception:
-            logger.error("Startup model load failed; will retry on first request")
+def preload_model_at_startup() -> None:
+    """Load model before the Flask server starts accepting requests."""
+    if not Config.LOAD_MODEL_ON_STARTUP or Config.MOCK_INFERENCE:
+        return
+    if is_loaded():
+        return
+    logger.info("Preloading model at server startup (path=%s)...", Config.MODEL_PATH)
+    load_model()
+    logger.info("Model ready for inference")
 
 
 if __name__ == "__main__":
-    if Config.LOAD_MODEL_ON_STARTUP:
-        threading.Thread(target=_startup_load, daemon=True).start()
+    preload_model_at_startup()
     app.run(host=Config.HOST, port=Config.PORT, debug=False, threaded=True)

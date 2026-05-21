@@ -64,7 +64,7 @@ Then deploy as usual (`./run.sh`). The app spreads the model across 4 GPUs and *
 - Keep **`RETURN_AUDIO=false`** unless you need speech output (~10 GB extra VRAM).
 - First model load can take **5–15 minutes**.
 - If OOM: lower `MAX_NEW_TOKENS`, avoid long video inputs, or set `VLLM_MAX_MODEL_LEN=16384` when using vLLM.
-- Use **one** gunicorn worker only (`run.sh` already does this).
+- Run a **single** server process (`python app.py` / `./run.sh`) — do not start multiple copies.
 - For vLLM (optional, faster): `INFERENCE_BACKEND=vllm`, `TENSOR_PARALLEL_SIZE=4`, plus the [Qwen3-Omni vLLM build](https://huggingface.co/Qwen/Qwen3-Omni-30B-A3B-Instruct#vllm-usage).
 
 ## Quick start (development / mock)
@@ -111,6 +111,8 @@ cp .env.example .env
 chmod +x run.sh
 ./run.sh
 ```
+
+The model **loads when the server starts** (before accepting traffic). First boot can take several minutes on g5.12xlarge; watch logs until `Model ready for inference`. `GET /health` reports `model_loaded` / `model_loading`.
 
 Security group: allow inbound **TCP 7860**.
 

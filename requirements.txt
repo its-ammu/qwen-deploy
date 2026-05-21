@@ -1,5 +1,4 @@
 flask>=3.0.0
-gunicorn>=22.0.0
 python-dotenv>=1.0.0
 
 # Qwen3-Omni (transformers from source per model card)
