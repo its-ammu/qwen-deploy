@@ -15,6 +15,10 @@
     <textarea id="system_prompt" rows="4" placeholder="Optional system instructions"></textarea>
     <label for="max_tokens">Max tokens</label>
     <input type="number" id="max_tokens" value="2048" min="64" max="16384" />
+    <button type="button" id="clear-chat" class="btn btn-ghost" style="width:100%;margin-top:8px">
+      Clear chat history
+    </button>
+    <p class="muted small">Chat memory is kept for this browser session.</p>
     <p class="muted small">Model: <strong>{{ model_id }}</strong></p>
     {% if return_audio %}
     <p class="muted small">Audio output enabled on server.</p>
@@ -30,8 +34,8 @@
           <input type="file" id="image" name="image" accept="image/*" hidden />
         </label>
         <label class="file-btn">
-          Audio
-          <input type="file" id="audio" name="audio" accept="audio/*" hidden />
+          Audio / song
+          <input type="file" id="audio" name="audio" accept="audio/*,.mp3,.wav,.m4a,.flac,.ogg" hidden />
         </label>
         <label class="file-btn">
           Video

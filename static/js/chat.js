@@ -1,27 +1,55 @@
 (function () {
+  const STORAGE_KEY = "qwen_chat_history_v1";
   const form = document.getElementById("chat-form");
   const messagesEl = document.getElementById("messages");
   const sendBtn = document.getElementById("send-btn");
+  const clearBtn = document.getElementById("clear-chat");
   const attachmentLabel = document.getElementById("attachment-label");
   const fileInputs = ["image", "audio", "video"].map((id) =>
     document.getElementById(id)
   );
 
-  const history = [];
+  /** @type {{role: string, content: string}[]} */
+  let history = loadHistory();
 
-  function appendMessage(role, text, extraHtml) {
+  function loadHistory() {
+    try {
+      const raw = sessionStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (_) {
+      /* ignore */
+    }
+    return [];
+  }
+
+  function saveHistory() {
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(history));
+  }
+
+  function renderHistory() {
+    messagesEl.innerHTML = "";
+    history.forEach((msg) => {
+      appendMessage(msg.role, msg.content, "", false);
+    });
+  }
+
+  function appendMessage(role, text, extraHtml, persist) {
     const div = document.createElement("div");
     div.className = `msg ${role}`;
-    div.textContent = text;
+    const p = document.createElement("div");
+    p.textContent = text;
+    div.appendChild(p);
     if (extraHtml) {
-      div.innerHTML = "";
-      const p = document.createElement("div");
-      p.textContent = text;
-      div.appendChild(p);
       div.insertAdjacentHTML("beforeend", extraHtml);
     }
     messagesEl.appendChild(div);
     messagesEl.scrollTop = messagesEl.scrollHeight;
+    if (persist !== false && role !== "system") {
+      /* history updated by caller */
+    }
   }
 
   function updateAttachmentLabel() {
@@ -35,19 +63,39 @@
     input.addEventListener("change", updateAttachmentLabel);
   });
 
+  if (clearBtn) {
+    clearBtn.addEventListener("click", () => {
+      history = [];
+      saveHistory();
+      renderHistory();
+    });
+  }
+
+  renderHistory();
+
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     const message = document.getElementById("message").value.trim();
-    if (!message) return;
+    const hasFile = fileInputs.some((input) => input.files && input.files[0]);
+    if (!message && !hasFile) return;
 
     const systemPrompt = document.getElementById("system_prompt").value.trim();
     const maxTokens = document.getElementById("max_tokens").value;
 
-    appendMessage("user", message);
-    history.push({ role: "user", content: message });
+    let displayText = message;
+    if (hasFile) {
+      const tags = fileInputs
+        .filter((i) => i.files && i.files[0])
+        .map((i) => `[${i.id}: ${i.files[0].name}]`);
+      displayText = [message, ...tags].filter(Boolean).join(" ");
+    }
+
+    appendMessage("user", displayText || "(media)", "", false);
+    history.push({ role: "user", content: displayText || message || "(audio/media)" });
 
     const formData = new FormData();
-    formData.append("message", message);
+    formData.append("message", message || "Describe the attached media.");
+    formData.append("history", JSON.stringify(history.slice(0, -1)));
     if (systemPrompt) formData.append("system_prompt", systemPrompt);
     if (maxTokens) formData.append("max_tokens", maxTokens);
 
@@ -75,13 +123,17 @@
       if (data.audio_url) {
         extra = `<audio controls src="${data.audio_url}" style="margin-top:8px;width:100%"></audio>`;
       }
-      appendMessage("assistant", data.text || "", extra);
-      history.push({ role: "assistant", content: data.text || "" });
+      const reply = data.text || "";
+      appendMessage("assistant", reply, extra, false);
+      history.push({ role: "assistant", content: reply });
+      saveHistory();
 
       form.reset();
       updateAttachmentLabel();
     } catch (err) {
-      appendMessage("system", `Error: ${err.message}`);
+      history.pop();
+      saveHistory();
+      appendMessage("system", `Error: ${err.message}`, "", false);
     } finally {
       sendBtn.disabled = false;
       sendBtn.textContent = "Send";

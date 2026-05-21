@@ -248,6 +248,60 @@ def save_upload(file_storage) -> str:
     return str(dest.resolve())
 
 
+def build_user_multimodal_content(
+    message: str,
+    *,
+    image_path: str | None = None,
+    audio_path: str | None = None,
+    video_path: str | None = None,
+) -> str | list[dict]:
+    blocks: list[dict] = []
+    if image_path:
+        blocks.append({"type": "image", "image": image_path})
+    if audio_path:
+        blocks.append({"type": "audio", "audio": audio_path})
+    if video_path:
+        blocks.append({"type": "video", "video": video_path})
+    if message:
+        blocks.append({"type": "text", "text": message})
+    if not blocks:
+        return ""
+    if len(blocks) == 1 and blocks[0]["type"] == "text":
+        return message
+    return blocks
+
+
+def build_conversation_with_history(
+    history: list[dict],
+    message: str,
+    system_prompt: str | None = None,
+    *,
+    image_path: str | None = None,
+    audio_path: str | None = None,
+    video_path: str | None = None,
+) -> list[dict]:
+    """Build full chat messages: system + prior turns + current user turn."""
+    conversation: list[dict] = []
+    if system_prompt:
+        conversation.append({"role": "system", "content": system_prompt})
+
+    for msg in history:
+        role = msg.get("role")
+        content = msg.get("content", "")
+        if role in ("user", "assistant") and content:
+            conversation.append({"role": role, "content": content})
+
+    user_content = build_user_multimodal_content(
+        message,
+        image_path=image_path,
+        audio_path=audio_path,
+        video_path=video_path,
+    )
+    if user_content:
+        conversation.append({"role": "user", "content": user_content})
+    return conversation
+
+
 def build_conversation_from_form(
     message: str,
     system_prompt: str | None = None,
@@ -255,20 +309,14 @@ def build_conversation_from_form(
     audio_path: str | None = None,
     video_path: str | None = None,
 ) -> list[dict]:
-    conversation: list[dict] = []
-    if system_prompt:
-        conversation.append({"role": "system", "content": system_prompt})
-
-    user_content: list[dict] = []
-    if image_path:
-        user_content.append({"type": "image", "image": image_path})
-    if audio_path:
-        user_content.append({"type": "audio", "audio": audio_path})
-    if video_path:
-        user_content.append({"type": "video", "video": video_path})
-    user_content.append({"type": "text", "text": message})
-    conversation.append({"role": "user", "content": user_content})
-    return conversation
+    return build_conversation_with_history(
+        [],
+        message,
+        system_prompt,
+        image_path=image_path,
+        audio_path=audio_path,
+        video_path=video_path,
+    )
 
 
 def generate(

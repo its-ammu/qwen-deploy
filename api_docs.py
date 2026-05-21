@@ -186,7 +186,28 @@ def build_openapi_spec(base_url: str) -> dict:
                                     ],
                                     "max_tokens": 512,
                                 },
-                            }
+                            },
+                            "multipart/form-data": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": {"type": "string"},
+                                        "history": {
+                                            "type": "string",
+                                            "description": "JSON array of prior {role, content} turns",
+                                        },
+                                        "system_prompt": {"type": "string"},
+                                        "max_tokens": {"type": "integer"},
+                                        "audio": {
+                                            "type": "string",
+                                            "format": "binary",
+                                            "description": "Song or audio file (mp3, wav, ...)",
+                                        },
+                                        "image": {"type": "string", "format": "binary"},
+                                        "video": {"type": "string", "format": "binary"},
+                                    },
+                                }
+                            },
                         },
                     },
                     "responses": {

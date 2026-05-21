@@ -177,7 +177,7 @@ curl -X POST http://localhost:7860/api/v1/chat/completions \
   }'
 ```
 
-### Multimodal example
+### Multimodal example (image URL)
 
 ```bash
 curl -X POST http://localhost:7860/api/v1/chat/completions \
@@ -189,6 +189,44 @@ curl -X POST http://localhost:7860/api/v1/chat/completions \
       "content": [
         {"type": "image_url", "image_url": {"url": "https://example.com/image.jpg"}},
         {"type": "text", "text": "Describe this image."}
+      ]
+    }]
+  }'
+```
+
+### Send a song / audio file (multipart upload)
+
+Upload an MP3/WAV (or other audio) with a question. Use the same endpoint with `multipart/form-data`:
+
+```bash
+curl -X POST http://localhost:7860/api/v1/chat/completions \
+  -H "X-API-Key: $API_KEY" \
+  -F "message=What genre is this song? Describe the mood and instruments." \
+  -F "audio=@/path/to/song.mp3"
+```
+
+**Chat memory via API** — pass prior turns as JSON in `history` (text only); attach new audio only on the latest message:
+
+```bash
+curl -X POST http://localhost:7860/api/v1/chat/completions \
+  -H "X-API-Key: $API_KEY" \
+  -F 'history=[{"role":"user","content":"What genre is this song?"},{"role":"assistant","content":"It sounds like jazz..."}]' \
+  -F "message=What is the tempo in BPM?" \
+  -F "audio=@/path/to/song.mp3"
+```
+
+**Remote audio URL** (JSON, no upload) — file must be reachable from the server:
+
+```bash
+curl -X POST http://localhost:7860/api/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: $API_KEY" \
+  -d '{
+    "messages": [{
+      "role": "user",
+      "content": [
+        {"type": "audio_url", "audio_url": {"url": "https://example.com/song.mp3"}},
+        {"type": "text", "text": "Summarize this track in one paragraph."}
       ]
     }]
   }'
@@ -207,9 +245,10 @@ curl -X POST http://localhost:7860/api/v1/generate \
 
 1. Open `http://<ec2-host>:7860`
 2. Enter the same `API_KEY` configured on the server
-3. Chat; optional image/audio/video attachments
+3. Chat with **session memory** (prior turns sent on each message; persisted in browser `sessionStorage`)
+4. Attach a **song or audio** with the “Audio / song” button, or image/video
 
-The UI uses session cookies (`/ui/api/chat`) — no need to paste the key on every message.
+The UI uses session cookies (`/ui/api/chat`) — no need to paste the key on every message. Media files are only sent on the message where you attach them; follow-up text questions use chat history without re-uploading audio.
 
 ## Configuration
 
