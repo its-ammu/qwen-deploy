@@ -11,5 +11,5 @@ torchvision>=0.16.0
 torchaudio>=2.1.0
 
 # Install separately on EC2 GPU instance:
-# pip install git+https://github.com/huggingface/transformers
-# pip install -U flash-attn --no-build-isolation   # optional, reduces VRAM
+pip install git+https://github.com/huggingface/transformers
+pip install -U flash-attn --no-build-isolation   # optional, reduces VRAM
