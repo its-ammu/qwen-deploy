@@ -1,0 +1,15 @@
+flask>=3.0.0
+gunicorn>=22.0.0
+python-dotenv>=1.0.0
+
+# Qwen3-Omni (install transformers from source per model card)
+accelerate>=0.33.0
+qwen-omni-utils>=0.0.8
+soundfile>=0.12.1
+torch>=2.1.0
+torchvision>=0.16.0
+torchaudio>=2.1.0
+
+# Install separately on EC2 GPU instance:
+# pip install git+https://github.com/huggingface/transformers
+# pip install -U flash-attn --no-build-isolation   # optional, reduces VRAM

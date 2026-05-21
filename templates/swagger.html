@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>API docs · Qwen3-Omni</title>
+  <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5.18.2/swagger-ui.css">
+  <style>
+    html { box-sizing: border-box; overflow-y: scroll; }
+    *, *:before, *:after { box-sizing: inherit; }
+    body { margin: 0; background: #fafafa; }
+    .topbar {
+      background: #1a2332;
+      color: #e8eef7;
+      padding: 12px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      font-family: system-ui, sans-serif;
+      font-size: 14px;
+    }
+    .topbar a { color: #6ee7b7; text-decoration: none; }
+    .topbar a:hover { text-decoration: underline; }
+    #swagger-ui { max-width: 1460px; margin: 0 auto; }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <span><strong>Qwen3-Omni</strong> — Swagger UI</span>
+    <span>
+      <a href="{{ url_for('index') }}">Chat UI</a>
+      ·
+      <a href="{{ openapi_url }}">openapi.json</a>
+    </span>
+  </div>
+  <div id="swagger-ui"></div>
+  <script src="https://unpkg.com/swagger-ui-dist@5.18.2/swagger-ui-bundle.js" crossorigin></script>
+  <script src="https://unpkg.com/swagger-ui-dist@5.18.2/swagger-ui-standalone-preset.js" crossorigin></script>
+  <script>
+    window.onload = function () {
+      window.ui = SwaggerUIBundle({
+        url: "{{ openapi_url }}",
+        dom_id: "#swagger-ui",
+        deepLinking: true,
+        presets: [
+          SwaggerUIBundle.presets.apis,
+          SwaggerUIStandalonePreset
+        ],
+        layout: "StandaloneLayout",
+        persistAuthorization: true,
+        tryItOutEnabled: true,
+      });
+    };
+  </script>
+</body>
+</html>

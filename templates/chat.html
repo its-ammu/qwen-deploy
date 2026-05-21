@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}Chat · Qwen3-Omni{% endblock %}
+
+{% block header_actions %}
+<form method="post" action="{{ url_for('logout') }}" class="inline-form">
+  <button type="submit" class="btn btn-ghost">Sign out</button>
+</form>
+{% endblock %}
+
+{% block content %}
+<section class="chat-layout">
+  <aside class="sidebar card">
+    <h3>Settings</h3>
+    <label for="system_prompt">System prompt</label>
+    <textarea id="system_prompt" rows="4" placeholder="Optional system instructions"></textarea>
+    <label for="max_tokens">Max tokens</label>
+    <input type="number" id="max_tokens" value="2048" min="64" max="16384" />
+    <p class="muted small">Model: <strong>{{ model_id }}</strong></p>
+    {% if return_audio %}
+    <p class="muted small">Audio output enabled on server.</p>
+    {% endif %}
+  </aside>
+
+  <section class="chat-panel card">
+    <div id="messages" class="messages" aria-live="polite"></div>
+    <form id="chat-form" class="composer" enctype="multipart/form-data">
+      <div class="attachments">
+        <label class="file-btn">
+          Image
+          <input type="file" id="image" name="image" accept="image/*" hidden />
+        </label>
+        <label class="file-btn">
+          Audio
+          <input type="file" id="audio" name="audio" accept="audio/*" hidden />
+        </label>
+        <label class="file-btn">
+          Video
+          <input type="file" id="video" name="video" accept="video/*" hidden />
+        </label>
+        <span id="attachment-label" class="muted small"></span>
+      </div>
+      <textarea
+        id="message"
+        name="message"
+        rows="3"
+        placeholder="Ask about text, images, audio, or video..."
+        required
+      ></textarea>
+      <div class="composer-actions">
+        <button type="submit" class="btn btn-primary" id="send-btn">Send</button>
+      </div>
+    </form>
+  </section>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  window.QWEN_UI = {
+    chatUrl: "{{ url_for('ui_chat') }}",
+    returnAudio: {{ 'true' if return_audio else 'false' }},
+  };
+</script>
+<script src="{{ url_for('static', filename='js/chat.js') }}"></script>
+{% endblock %}
